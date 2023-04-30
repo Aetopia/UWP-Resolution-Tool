@@ -6,39 +6,13 @@
 // Store information like the UWP app's main process name, window handle and display mode information.
 struct PROCESS
 {
-    WCHAR *ProcessName;
+    WCHAR *Title;
     HWND hWnd;
     DEVMODEW DevMode;
     MONITORINFOEXW MonitorInfoEx;
 } Process = {.MonitorInfoEx = {.cbSize = sizeof(MONITORINFOEXW)},
              .DevMode = {.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFREQUENCY,
                          .dmSize = sizeof(DEVMODEW)}};
-
-// To get the main process of an UWP app, we need to enumarate through its child windows.
-BOOL EnumChildWindowsProc(HWND hWnd, LPARAM lParam)
-{
-    DWORD Pid;
-    WCHAR FileName[MAX_PATH];
-    HANDLE hProcess;
-    BOOL bNotImmersiveProcess;
-
-    // Gather required data from the window handle.
-    GetWindowThreadProcessId(hWnd, &Pid);
-    hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, Pid);
-    GetModuleFileNameExW(hProcess, 0, FileName, MAX_PATH);
-    bNotImmersiveProcess = !IsImmersiveProcess(hProcess);
-    CloseHandle(hProcess);
-
-    // Extract the process name.
-    PathStripPathW(FileName);
-    wcslwr(FileName);
-
-    // Make sure the process name matches and it is an immersive process.
-    if (wcscmp(FileName, Process.ProcessName) ||
-        bNotImmersiveProcess)
-        return TRUE;
-    return FALSE;
-}
 
 LRESULT WindowProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 {
@@ -53,7 +27,10 @@ LRESULT WindowProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam)
         do
         {
             Process.hWnd = GetForegroundWindow();
-            if (!EnumChildWindows(Process.hWnd, EnumChildWindowsProc, 0))
+            int WndTextLength = GetWindowTextLengthW(Process.hWnd ) + 1;
+            WCHAR Title[WndTextLength];
+            GetWindowTextW(Process.hWnd, Title, WndTextLength);
+            if (!wcscmp(Process.Title, Title))
                 break;
         } while (!SleepEx(1, TRUE));
 
@@ -82,8 +59,7 @@ LRESULT WindowProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam)
                 }
 
                 // Reset the resolution and minimize the window.
-                else if (hAWnd != Process.hWnd &&
-                         !IsIconic(Process.hWnd))
+                else if (hAWnd != Process.hWnd)
                 {
                     printf("Not Foreground Window: %ld\n", ChangeDisplaySettingsExW(Process.MonitorInfoEx.szDevice, 0, 0, CDS_FULLSCREEN, 0));
                     ShowWindow(Process.hWnd, SW_MINIMIZE);
@@ -123,13 +99,12 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
     LPWSTR *ArgV = CommandLineToArgvW(GetCommandLineW(), &ArgC);
     if (ArgC != 5)
     {
-        MessageBoxW(0, L"<Process Name> <Width> <Height <Refresh Rate>", L"UWP Resolution Tool", 0);
+        MessageBoxW(0, L"<Title> <Width> <Height <Refresh Rate>", L"UWP Resolution Tool", 0);
         return 1;
     };
 
     // Get the main process of the target UWP app.
-    Process.ProcessName = ArgV[1];
-    wcslwr(Process.ProcessName);
+    Process.Title = ArgV[1];
 
     // Check if the specified display mode doesn't have the width, height or refresh rate set to 0.
     Process.DevMode.dmPelsWidth = wtoi_s(ArgV[2]);
