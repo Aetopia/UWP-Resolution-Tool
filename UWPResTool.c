@@ -122,7 +122,10 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
         .hInstance = hInstance};
     LPWSTR *ArgV = CommandLineToArgvW(GetCommandLineW(), &ArgC);
     if (ArgC != 5)
+    {
+        MessageBoxW(0, L"<Process Name> <Width> <Height <Refresh Rate>", L"UWP Resolution Tool", 0);
         return 1;
+    };
 
     // Get the main process of the target UWP app.
     Process.ProcessName = ArgV[1];
